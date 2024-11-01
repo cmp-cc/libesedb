@@ -1,0 +1,44 @@
+# Build from source.
+name: build
+on: [push, pull_request]
+permissions: read-all
+
+jobs:
+  build_windows:
+    runs-on: windows-latest
+    strategy:
+      matrix:
+        architecture: ['x86', 'x64']
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Install build dependencies
+        run: |
+          choco install cmake --version=3.21.0 -y &&
+          choco install mingw --version=8.1.0 -y
+
+      - name: Download test data
+        run: |
+          if test -x "synctestdata.sh"; then ./synctestdata.sh; fi
+
+      - name: Configure CMake
+        run: |
+          mkdir build &&
+          cd build &&
+          cmake -G "MinGW Makefiles" -D CMAKE_BUILD_TYPE=Release -D CMAKE_C_COMPILER=${{ matrix.architecture == 'x64' && 'x86_64-w64-mingw32-gcc' || 'i686-w64-mingw32-gcc' }} -DBUILD_SHARED_LIBS=ON ..
+
+      - name: Build DLL
+        run: |
+          cd build &&
+          mingw32-make
+
+      - name: Run tests
+        run: |
+          cd build &&
+          ./tests/runtests.sh
+
+      - name: Upload DLL
+        uses: actions/upload-artifact@v4
+        with:
+          name: libesedb-${{ matrix.architecture }}-dll
+          path: build/libesedb.dll  # Adjust this path as necessary
